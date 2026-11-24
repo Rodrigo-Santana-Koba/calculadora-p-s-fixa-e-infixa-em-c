@@ -1,0 +1,1094 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#define TAM_EXPRESSAO 200
+#define TAM_CONVERTIDA 400
+//codigo de: Rodrigo Santana
+typedef struct NoTexto
+{
+    char texto[TAM_CONVERTIDA];
+    struct NoTexto *prox;
+} Tipo_PilhaTexto;
+
+typedef struct RegistroExpressao
+{
+    char expressao[TAM_EXPRESSAO];
+    double resultado;
+    int situacao; /* 1 = calculada 2 = invalida 3 = erro no calculo */
+    struct RegistroExpressao *prox;
+} Tipo_Expressao;
+typedef struct NoOperador
+{
+    char operador;
+    struct NoOperador *prox;
+} Tipo_PilhaOperador;
+
+typedef struct NoNumero
+{
+    double valor;
+    struct NoNumero *prox;
+} Tipo_PilhaNumero;
+
+void inicializa_pilha(Tipo_PilhaOperador **topo)
+{
+    *topo = NULL;
+}
+
+Tipo_PilhaOperador *cria_no_operador(void)
+{
+    Tipo_PilhaOperador *novo;
+
+    novo = malloc(sizeof(Tipo_PilhaOperador));
+
+    if(novo == NULL){
+        printf("Problema de alocacao.\n");
+        exit(1);
+    }
+
+    novo->prox = NULL;
+
+    return novo;
+}
+
+void empilha_operador(Tipo_PilhaOperador **topo, char operador)
+{
+    Tipo_PilhaOperador *novo;
+
+    novo = cria_no_operador();
+    novo->operador = operador;
+    novo->prox = *topo;
+    *topo = novo;
+}
+
+char desempilha_operador(Tipo_PilhaOperador **topo)
+{
+    Tipo_PilhaOperador *aux;
+    char operador;
+
+    if(*topo == NULL){
+        return '\0';
+    }
+
+    aux = *topo;
+    operador = aux->operador;
+
+    *topo = aux->prox;
+    free(aux);
+
+    return operador;
+}
+
+char consulta_topo(Tipo_PilhaOperador *topo)
+{
+    if(topo == NULL){
+        return '\0';
+    }
+
+    return topo->operador;
+}
+
+int pilha_vazia(Tipo_PilhaOperador *topo)
+{
+    return topo == NULL;
+}
+
+void libera_pilha(Tipo_PilhaOperador **topo)
+{
+    while(!pilha_vazia(*topo)){
+        desempilha_operador(topo);
+    }
+}
+
+int eh_operador(char caractere)
+{
+    if(caractere == '+'){
+        return 1;
+    }
+
+    if(caractere == '-'){
+        return 1;
+    }
+
+    if(caractere == '*'){
+        return 1;
+    }
+
+    if(caractere == '/'){
+        return 1;
+    }
+
+    if(caractere == '^'){
+        return 1;
+    }
+
+    return 0;
+}
+
+int eh_digito(char caractere)
+{
+    if(caractere >= '0' && caractere <= '9'){
+        return 1;
+    }
+
+    return 0;
+}
+
+int prioridade(char operador)
+{
+    if(operador == '+'){
+        return 1;
+    }
+
+    if(operador == '-'){
+        return 1;
+    }
+
+    if(operador == '*'){
+        return 2;
+    }
+
+    if(operador == '/'){
+        return 2;
+    }
+
+    if(operador == '^'){
+        return 3;
+    }
+
+    return 0;
+}
+
+void limpa_entrada(void)
+{
+    int caractere;
+
+    caractere = getchar();
+
+    while(caractere != '\n' && caractere != EOF){
+        caractere = getchar();
+    }
+}
+
+int ler_expressao(char expressao[], int tamanho)
+{
+    int i = 0;
+
+    if(tamanho < 2){
+        return 0;
+    }
+
+    if(fgets(expressao, tamanho, stdin) == NULL){
+        expressao[0] = '\0';
+        return 0;
+    }
+
+    while(expressao[i] != '\0'){
+        if(expressao[i] == '\n'){
+            expressao[i] = '\0';
+            return 1;
+        }
+
+        i++;
+    }
+
+    if(feof(stdin)){
+        return 1;
+    }
+
+    limpa_entrada();
+    expressao[0] = '\0';
+    return 0;
+}
+
+int parenteses_validos(char expressao[])
+{
+    Tipo_PilhaOperador *topo;
+
+    inicializa_pilha(&topo);
+
+    for(int i = 0; expressao[i] != '\0'; i++){
+        if(expressao[i] == '('){
+            empilha_operador(&topo, '(');
+        }
+        else if(expressao[i] == ')'){
+            if(pilha_vazia(topo)){
+                return 0;
+            }
+
+            desempilha_operador(&topo);
+        }
+    }
+
+    if(!pilha_vazia(topo)){
+        libera_pilha(&topo);
+        return 0;
+    }
+
+    return 1;
+}
+
+int caracteres_validos(char expressao[])
+{
+    char caractere;
+
+    for(int i = 0; expressao[i] != '\0'; i++){
+        caractere = expressao[i];
+
+        if(eh_digito(caractere)){
+            continue;
+        }
+
+        if(eh_operador(caractere)){
+            continue;
+        }
+
+        if(caractere == '(' || caractere == ')'){
+            continue;
+        }
+
+        if(caractere == '.'){
+            continue;
+        }
+
+        if(caractere == ' ' || caractere == '\t' ||
+           caractere == '\r'){
+            continue;
+        }
+
+        return 0;
+    }
+
+    return 1;
+}
+
+int eh_espaco(char caractere)
+{
+    if(caractere == ' '){
+        return 1;
+    }
+
+    if(caractere == '\t'){
+        return 1;
+    }
+
+    if(caractere == '\r'){
+        return 1;
+    }
+
+    return 0;
+}
+
+int avanca_numero(char expressao[], int *indice)
+{
+    int i = *indice;
+    int pontos = 0;
+    int digitos = 0;
+
+    while(eh_digito(expressao[i]) || expressao[i] == '.'){
+        if(expressao[i] == '.'){
+            pontos++;
+
+            if(pontos > 1){
+                return 0;
+            }
+        }
+        else{
+            digitos++;
+        }
+
+        i++;
+    }
+
+    if(digitos == 0){
+        return 0;
+    }
+
+    *indice = i;
+    return 1;
+}
+
+int expressao_valida(char expressao[])
+{
+    int i = 0;
+    int esperaNumero = 1;
+    char caractere;
+
+    if(!caracteres_validos(expressao)){
+        return 0;
+    }
+
+    if(!parenteses_validos(expressao)){
+        return 0;
+    }
+
+    while(expressao[i] != '\0'){
+        caractere = expressao[i];
+
+        if(eh_espaco(caractere)){
+            i++;
+            continue;
+        }
+
+        if(esperaNumero == 1){
+            if(caractere == '('){
+                i++;
+                continue;
+            }
+
+            if(caractere == '+' || caractere == '-'){
+                i++;
+                continue;
+            }
+
+            if(eh_digito(caractere) || caractere == '.'){
+                if(!avanca_numero(expressao, &i)){
+                    return 0;
+                }
+
+                esperaNumero = 0;
+                continue;
+            }
+
+            return 0;
+        }
+
+        if(eh_operador(caractere)){
+            esperaNumero = 1;
+            i++;
+            continue;
+        }
+
+        if(caractere == ')'){
+            i++;
+            continue;
+        }
+
+        return 0;
+    }
+
+    if(esperaNumero == 1){
+        return 0;
+    }
+
+    return 1;
+}
+
+int adiciona_token(char saida[], int tamanho, char token[], int quantidade)
+{
+    int posicao = strlen(saida);
+
+    if(posicao + quantidade + 2 > tamanho){
+        return 0;
+    }
+
+    for(int i = 0; i < quantidade; i++){
+        saida[posicao] = token[i];
+        posicao++;
+    }
+
+    saida[posicao] = ' ';
+    saida[posicao + 1] = '\0';
+
+    return 1;
+}
+
+int deve_desempilhar(char operadorPilha, char operadorAtual)
+{
+    if(operadorPilha == '('){
+        return 0;
+    }
+
+    if(operadorPilha == '~'){
+        if(operadorAtual == '^'){
+            return 0;
+        }
+
+        return 1;
+    }
+
+    if(prioridade(operadorPilha) > prioridade(operadorAtual)){
+        return 1;
+    }
+
+    if(prioridade(operadorPilha) == prioridade(operadorAtual)){
+        if(operadorAtual == '^'){
+            return 0;
+        }
+
+        return 1;
+    }
+
+    return 0;
+}
+
+int infixa_para_posfixa(char expressao[], char posfixa[], int tamanho)
+{
+    Tipo_PilhaOperador *topo;
+    int i = 0;
+    int inicio;
+    int esperaNumero = 1;
+    int sucesso = 1;
+    char caractere;
+    char operador;
+
+    if(tamanho < 1){
+        return 0;
+    }
+
+    posfixa[0] = '\0';
+
+    if(!expressao_valida(expressao)){
+        return 0;
+    }
+
+    inicializa_pilha(&topo);
+
+    while(expressao[i] != '\0' && sucesso == 1){
+        caractere = expressao[i];
+
+        if(eh_espaco(caractere)){
+            i++;
+            continue;
+        }
+
+        if(eh_digito(caractere) || caractere == '.'){
+            inicio = i;
+            avanca_numero(expressao, &i);
+
+            sucesso = adiciona_token(posfixa, tamanho,
+                                     &expressao[inicio], i - inicio);
+
+            esperaNumero = 0;
+            continue;
+        }
+
+        if(caractere == '('){
+            empilha_operador(&topo, '(');
+            esperaNumero = 1;
+            i++;
+            continue;
+        }
+
+        if(caractere == ')'){
+            while(!pilha_vazia(topo) &&
+                  consulta_topo(topo) != '(' && sucesso == 1){
+                operador = desempilha_operador(&topo);
+                sucesso = adiciona_token(posfixa, tamanho, &operador, 1);
+            }
+
+            if(sucesso == 1){
+                desempilha_operador(&topo);
+            }
+
+            esperaNumero = 0;
+            i++;
+            continue;
+        }
+
+        if(esperaNumero == 1){
+            if(caractere == '-'){
+                empilha_operador(&topo, '~');
+            }
+
+            i++;
+            continue;
+        }
+
+        while(!pilha_vazia(topo) && sucesso == 1 &&
+              deve_desempilhar(consulta_topo(topo), caractere)){
+            operador = desempilha_operador(&topo);
+            sucesso = adiciona_token(posfixa, tamanho, &operador, 1);
+        }
+
+        if(sucesso == 1){
+            empilha_operador(&topo, caractere);
+        }
+
+        esperaNumero = 1;
+        i++;
+    }
+
+    while(!pilha_vazia(topo) && sucesso == 1){
+        operador = desempilha_operador(&topo);
+        sucesso = adiciona_token(posfixa, tamanho, &operador, 1);
+    }
+
+    libera_pilha(&topo);
+
+    if(sucesso == 0){
+        posfixa[0] = '\0';
+        return 0;
+    }
+
+    posfixa[strlen(posfixa) - 1] = '\0';
+    return 1;
+}
+
+void inicializa_pilha_numeros(Tipo_PilhaNumero **topo)
+{
+    *topo = NULL;
+}
+
+Tipo_PilhaNumero *cria_no_numero(void)
+{
+    Tipo_PilhaNumero *novo;
+
+    novo = malloc(sizeof(Tipo_PilhaNumero));
+
+    if(novo == NULL){
+        printf("Problema de alocacao.\n");
+        exit(1);
+    }
+
+    novo->prox = NULL;
+
+    return novo;
+}
+
+void empilha_numero(Tipo_PilhaNumero **topo, double valor)
+{
+    Tipo_PilhaNumero *novo;
+
+    novo = cria_no_numero();
+    novo->valor = valor;
+    novo->prox = *topo;
+    *topo = novo;
+}
+
+int pilha_numeros_vazia(Tipo_PilhaNumero *topo)
+{
+    if(topo == NULL){
+        return 1;
+    }
+
+    return 0;
+}
+
+int desempilha_numero(Tipo_PilhaNumero **topo, double *valor)
+{
+    Tipo_PilhaNumero *aux;
+
+    if(pilha_numeros_vazia(*topo)){
+        return 0;
+    }
+
+    aux = *topo;
+    *valor = aux->valor;
+    *topo = aux->prox;
+
+    free(aux);
+    return 1;
+}
+
+void libera_pilha_numeros(Tipo_PilhaNumero **topo)
+{
+    double valor;
+
+    while(!pilha_numeros_vazia(*topo)){
+        desempilha_numero(topo, &valor);
+    }
+}
+
+int aplica_operacao(char operador, double primeiro, double segundo, double *resultado)
+{
+    if(operador == '+'){
+        *resultado = primeiro + segundo;
+    }
+    else if(operador == '-'){
+        *resultado = primeiro - segundo;
+    }
+    else if(operador == '*'){
+        *resultado = primeiro * segundo;
+    }
+    else if(operador == '/'){
+        if(segundo == 0){
+            return 0;
+        }
+
+        *resultado = primeiro / segundo;
+    }
+    else if(operador == '^'){
+        *resultado = pow(primeiro, segundo);
+    }
+    else{
+        return 0;
+    }
+
+    if(!isfinite(*resultado)){
+        return 0;
+    }
+
+    return 1;
+}
+
+int calcula_posfixa(char posfixa[], double *resultado)
+{
+    Tipo_PilhaNumero *topo;
+    int i = 0;
+    int sucesso = 1;
+    char caractere;
+    char *fim;
+    double valor;
+    double primeiro;
+    double segundo;
+
+    inicializa_pilha_numeros(&topo);
+
+    while(posfixa[i] != '\0' && sucesso == 1){
+        caractere = posfixa[i];
+
+        if(eh_espaco(caractere)){
+            i++;
+            continue;
+        }
+
+        if(eh_digito(caractere) || caractere == '.'){
+            valor = strtod(&posfixa[i], &fim);
+
+            if(fim == &posfixa[i] || !isfinite(valor)){
+                sucesso = 0;
+                break;
+            }
+
+            if(*fim != '\0' && !eh_espaco(*fim)){
+                sucesso = 0;
+                break;
+            }
+
+            empilha_numero(&topo, valor);
+            i = fim - posfixa;
+            continue;
+        }
+
+        if(posfixa[i + 1] != '\0' &&
+           !eh_espaco(posfixa[i + 1])){
+            sucesso = 0;
+            break;
+        }
+
+        if(caractere == '~'){
+            if(!desempilha_numero(&topo, &valor)){
+                sucesso = 0;
+                break;
+            }
+
+            empilha_numero(&topo, -valor);
+            i++;
+            continue;
+        }
+
+        if(eh_operador(caractere)){
+            if(!desempilha_numero(&topo, &segundo)){
+                sucesso = 0;
+                break;
+            }
+
+            if(!desempilha_numero(&topo, &primeiro)){
+                sucesso = 0;
+                break;
+            }
+
+            if(!aplica_operacao(caractere, primeiro, segundo, &valor)){
+                sucesso = 0;
+                break;
+            }
+
+            empilha_numero(&topo, valor);
+            i++;
+            continue;
+        }
+
+        sucesso = 0;
+    }
+
+    if(sucesso == 1){
+        if(!desempilha_numero(&topo, &valor)){
+            sucesso = 0;
+        }
+        else if(!pilha_numeros_vazia(topo)){
+            sucesso = 0;
+        }
+        else{
+            *resultado = valor;
+        }
+    }
+
+    libera_pilha_numeros(&topo);
+    return sucesso;
+}
+
+int empilha_texto(Tipo_PilhaTexto **topo, char texto[])
+{
+    Tipo_PilhaTexto *novo;
+
+    if(strlen(texto) >= TAM_CONVERTIDA){
+        return 0;
+    }
+
+    novo = malloc(sizeof(Tipo_PilhaTexto));
+
+    if(novo == NULL){
+        return 0;
+    }
+
+    strcpy(novo->texto, texto);
+    novo->prox = *topo;
+    *topo = novo;
+
+    return 1;
+}
+
+int desempilha_texto(Tipo_PilhaTexto **topo, char texto[])
+{
+    Tipo_PilhaTexto *aux;
+
+    if(*topo == NULL){
+        return 0;
+    }
+
+    aux = *topo;
+    strcpy(texto, aux->texto);
+    *topo = aux->prox;
+
+    free(aux);
+    return 1;
+}
+
+void libera_pilha_textos(Tipo_PilhaTexto **topo)
+{
+    Tipo_PilhaTexto *aux;
+
+    while(*topo != NULL){
+        aux = *topo;
+        *topo = aux->prox;
+        free(aux);
+    }
+}
+
+int combina_prefixa(Tipo_PilhaTexto **topo, char operador)
+{
+    char primeiro[TAM_CONVERTIDA];
+    char segundo[TAM_CONVERTIDA];
+    char texto[TAM_CONVERTIDA];
+    int tamanho;
+
+    if(operador == '~'){
+        if(!desempilha_texto(topo, primeiro)){
+            return 0;
+        }
+
+        tamanho = snprintf(texto, sizeof(texto), "~ %s", primeiro);
+    }
+    else{
+        if(!eh_operador(operador)){
+            return 0;
+        }
+
+        if(!desempilha_texto(topo, segundo)){
+            return 0;
+        }
+
+        if(!desempilha_texto(topo, primeiro)){
+            return 0;
+        }
+
+        tamanho = snprintf(texto, sizeof(texto), "%c %s %s",
+                           operador, primeiro, segundo);
+    }
+
+    if(tamanho < 0 || tamanho >= TAM_CONVERTIDA){
+        return 0;
+    }
+
+    return empilha_texto(topo, texto);
+}
+
+int infixa_para_prefixa(char expressao[], char prefixa[], int tamanho)
+{
+    Tipo_PilhaTexto *topo = NULL;
+    char posfixa[TAM_CONVERTIDA];
+    char token[TAM_CONVERTIDA];
+    int i = 0;
+    int inicio;
+    int quantidade;
+    int sucesso = 1;
+
+    if(tamanho < 1){
+        return 0;
+    }
+
+    prefixa[0] = '\0';
+
+    if(!infixa_para_posfixa(expressao, posfixa, TAM_CONVERTIDA)){
+        return 0;
+    }
+
+    while(posfixa[i] != '\0' && sucesso == 1){
+        if(eh_espaco(posfixa[i])){
+            i++;
+            continue;
+        }
+
+        inicio = i;
+
+        while(posfixa[i] != '\0' && !eh_espaco(posfixa[i])){
+            i++;
+        }
+
+        quantidade = i - inicio;
+        memcpy(token, &posfixa[inicio], quantidade);
+        token[quantidade] = '\0';
+
+        if(eh_digito(token[0]) || token[0] == '.'){
+            sucesso = empilha_texto(&topo, token);
+        }
+        else{
+            sucesso = combina_prefixa(&topo, token[0]);
+        }
+    }
+
+    if(sucesso == 1){
+        if(!desempilha_texto(&topo, token)){
+            sucesso = 0;
+        }
+        else if(topo != NULL){
+            sucesso = 0;
+        }
+        else if((int) strlen(token) >= tamanho){
+            sucesso = 0;
+        }
+        else{
+            strcpy(prefixa, token);
+        }
+    }
+
+    libera_pilha_textos(&topo);
+    return sucesso;
+}
+
+int calcula_expressao(char expressao[], double *resultado)
+{
+    char posfixa[TAM_CONVERTIDA];
+
+    if(!infixa_para_posfixa(expressao, posfixa, TAM_CONVERTIDA)){
+        return 0;
+    }
+
+    return calcula_posfixa(posfixa, resultado);
+}
+
+int insere_expressao(Tipo_Expressao **inicio, char expressao[],double resultado, int situacao)
+{
+    Tipo_Expressao *novo;
+    Tipo_Expressao *atual;
+
+    if(strlen(expressao) >= TAM_EXPRESSAO){
+        return 0;
+    }
+
+    novo = malloc(sizeof(Tipo_Expressao));
+
+    if(novo == NULL){
+        return 0;
+    }
+
+    strcpy(novo->expressao, expressao);
+    novo->resultado = resultado;
+    novo->situacao = situacao;
+    novo->prox = NULL;
+
+    if(*inicio == NULL){
+        *inicio = novo;
+    }
+    else{
+        atual = *inicio;
+
+        while(atual->prox != NULL){
+            atual = atual->prox;
+        }
+
+        atual->prox = novo;
+    }
+
+    return 1;
+}
+
+void mostra_resultados(Tipo_Expressao *inicio)
+{
+    Tipo_Expressao *atual = inicio;
+
+    if(inicio == NULL){
+        printf("Nenhuma expressao registrda\n");
+        return;
+    }
+
+    printf("\nResultados das expressoes:\n");
+
+    while(atual != NULL){
+        printf("%s = ", atual->expressao);
+
+        if(atual->situacao == 1){
+            printf("%.10g\n", atual->resultado);
+        }
+        else if(atual->situacao == 2){
+            printf("Expressao invalida.\n");
+        }
+        else{
+            printf("Erro no calculo.\n");
+        }
+
+        atual = atual->prox;
+    }
+}
+
+void libera_expressoes(Tipo_Expressao **inicio)
+{
+    Tipo_Expressao *aux;
+
+    while(*inicio != NULL){
+        aux = *inicio;
+        *inicio = aux->prox;
+        free(aux);
+    }
+}
+
+void processa_expressoes(void)
+{
+    Tipo_Expressao *inicio = NULL;
+    char expressao[TAM_EXPRESSAO];
+    double resultado;
+    int situacao;
+
+    printf("\nDigite uma expressao por linha. Digite FIM para encerrar.\n");
+
+    for(;;){
+        printf("Expressao: ");
+
+        if(!ler_expressao(expressao, TAM_EXPRESSAO)){
+            if(feof(stdin) || ferror(stdin)){
+                break;
+            }
+
+            printf("Nao foi possivel ler a expressao.\n");
+            continue;
+        }
+
+        if(strcmp(expressao, "FIM") == 0 ||
+           strcmp(expressao, "fim") == 0){
+            break;
+        }
+
+        resultado = 0;
+
+        if(!expressao_valida(expressao)){
+            situacao = 2;
+        }
+        else if(!calcula_expressao(expressao, &resultado)){
+            situacao = 3;
+        }
+        else{
+            situacao = 1;
+        }
+
+        if(!insere_expressao(&inicio, expressao, resultado, situacao)){
+            printf("Problema de alocacao.\n");
+            break;
+        }
+    }
+
+    mostra_resultados(inicio);
+    libera_expressoes(&inicio);
+}
+
+int main(void)
+{
+    int opcao;
+    int leitura;
+    char expressao[TAM_EXPRESSAO];
+    char convertida[TAM_CONVERTIDA];
+
+    for(;;)
+    {
+        printf("\n1. Converter infixa para pos-fixa");
+        printf("\n2. Converter infixa para pre-fixa");
+        printf("\n3. Verificar se a expressao e valida");
+        printf("\n4. Calcular expressoes");
+        printf("\n5. sair");
+        printf("\nDigite a sua opcao: ");
+
+        leitura = scanf("%d", &opcao);
+
+        if(leitura != 1){
+            if(feof(stdin) || ferror(stdin)){
+                return 0;
+            }
+
+            limpa_entrada();
+            printf("\nOpcao invalida.\n");
+            continue;
+        }
+
+        limpa_entrada();
+
+        if(opcao >= 1 && opcao <= 3){
+            printf("\nDigite a expressao: ");
+
+            if(!ler_expressao(expressao, TAM_EXPRESSAO)){
+                if(feof(stdin) || ferror(stdin)){
+                    return 0;
+                }
+
+                printf("Nao foi possivel ler a expressao.\n");
+                continue;
+            }
+        }
+
+        switch(opcao)
+        {
+            case 1:{
+                if(infixa_para_posfixa(expressao, convertida,
+                                      TAM_CONVERTIDA)){
+                    printf("Posfixa: %s\n", convertida);
+                }
+                else{
+                    printf("Nao foi possivel converter a expressao.\n");
+                }
+                break;
+            }
+
+            case 2:{
+                if(infixa_para_prefixa(expressao, convertida,
+                                      TAM_CONVERTIDA)){
+                    printf("Prefixa: %s\n", convertida);
+                }
+                else{
+                    printf("Nao foi possivel converter a expressao.\n");
+                }
+                break;
+            }
+
+            case 3:{
+                if(expressao_valida(expressao)){
+                    printf("Expressao valida.\n");
+                }
+                else{
+                    printf("Expressao invalida.\n");
+                }
+                break;
+            }
+
+            case 4:{
+                processa_expressoes();
+                break;
+            }
+
+            case 5:{
+                return 0;
+            }
+
+            default:
+                printf("\nOpcao invalida.\n");
+        }
+    }
+}
